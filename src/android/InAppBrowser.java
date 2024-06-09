@@ -20,7 +20,10 @@ package org.apache.cordova.inappbrowser;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -29,6 +32,8 @@ import android.provider.Browser;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.Color;
 import android.net.http.SslError;
 import android.net.Uri;
@@ -45,6 +50,7 @@ import android.view.WindowManager.LayoutParams;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
+import android.webkit.CookieSyncManager;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
 import android.webkit.SslErrorHandler;
@@ -56,6 +62,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.DownloadListener;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -256,7 +263,10 @@ public class InAppBrowser extends CordovaPlugin {
             });
         }
         else if (action.equals("close")) {
-            closeDialog();
+
+                cancelDialog();
+
+//            closeDialog();
         }
         else if (action.equals("loadAfterBeforeload")) {
             if (beforeload == null) {
@@ -274,7 +284,6 @@ public class InAppBrowser extends CordovaPlugin {
                         ((InAppBrowserClient)inAppWebView.getWebViewClient()).waitForBeforeload = false;
                     }
                     inAppWebView.loadUrl(url);
-
                 }
             });
         }
@@ -522,37 +531,66 @@ public class InAppBrowser extends CordovaPlugin {
      * Closes the dialog
      */
     public void closeDialog() {
-        this.cordova.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                final WebView childView = inAppWebView;
-                // The JS protects against multiple calls, so this should happen only when
-                // closeDialog() is called by other native code.
-                if (childView == null) {
-                    return;
-                }
 
-                childView.setWebViewClient(new WebViewClient() {
-                    // NB: wait for about:blank before dismissing
-                    public void onPageFinished(WebView view, String url) {
-                        if (dialog != null && !cordova.getActivity().isFinishing()) {
-                            dialog.dismiss();
-                            dialog = null;
-                        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this.cordova.getActivity());
+
+        builder.setTitle("Confirmation");
+        builder.setMessage("Do you want Cancel your order");
+
+        builder.setPositiveButton("YES", new DialogInterface.OnClickListener() {
+
+            public void onClick(DialogInterface dialog, int which) {
+                cancelDialog();
+                dialog.dismiss();
+            }
+
+        });
+
+        builder.setNegativeButton("NO", (dialog, which) -> {
+            // I do not need any action here you might
+            dialog.dismiss();
+        });
+
+        AlertDialog alert = builder.create();
+        alert.show();
+
+
+        Button btn_neg = alert.getButton(DialogInterface.BUTTON_NEGATIVE);
+        btn_neg.setTextColor(Color.parseColor("#f16521"));
+        Button btn_pos = alert.getButton(DialogInterface.BUTTON_POSITIVE);
+        btn_pos.setTextColor(Color.parseColor("#f16521"));
+
+    }
+
+    public void cancelDialog(){
+        this.cordova.getActivity().runOnUiThread(() -> {
+            final WebView childView = inAppWebView;
+            // The JS protects against multiple calls, so this should happen only when
+            // closeDialog() is called by other native code.
+            if (childView == null) {
+                return;
+            }
+
+            childView.setWebViewClient(new WebViewClient() {
+                // NB: wait for about:blank before dismissing
+                public void onPageFinished(WebView view, String url) {
+                    if (dialog != null && !cordova.getActivity().isFinishing()) {
+                        dialog.dismiss();
+                        dialog = null;
                     }
-                });
-                // NB: From SDK 19: "If you call methods on WebView from any thread
-                // other than your app's UI thread, it can cause unexpected results."
-                // http://developer.android.com/guide/webapps/migrating.html#Threads
-                childView.loadUrl("about:blank");
-
-                try {
-                    JSONObject obj = new JSONObject();
-                    obj.put("type", EXIT_EVENT);
-                    sendUpdate(obj, false);
-                } catch (JSONException ex) {
-                    LOG.d(LOG_TAG, "Should never happen");
                 }
+            });
+            // NB: From SDK 19: "If you call methods on WebView from any thread
+            // other than your app's UI thread, it can cause unexpected results."
+            // http://developer.android.com/guide/webapps/migrating.html#Threads
+            childView.loadUrl("about:blank");
+
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("type", EXIT_EVENT);
+                sendUpdate(obj, false);
+            } catch (JSONException ex) {
+                LOG.d(LOG_TAG, "Should never happen");
             }
         });
     }
